@@ -76,7 +76,8 @@ stdenv.mkDerivation rec {
     ];
 
   # Test failure on QEMU only (#300550)
-  doCheck = !stdenv.buildPlatform.isRiscV64;
+  # gnulib's threading/getopt tests fail under static musl
+  doCheck = !stdenv.buildPlatform.isRiscV64 && !stdenv.hostPlatform.isStatic;
 
   meta = {
     homepage = "https://www.gnu.org/software/diffutils/diffutils.html";

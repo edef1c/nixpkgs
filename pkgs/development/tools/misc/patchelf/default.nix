@@ -25,7 +25,8 @@ stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   # fails 8 out of 24 tests, problems when loading libc.so.6
-  doCheck = stdenv.name == "stdenv-linux";
+  # the test suite builds and links against shared objects, which can't work in pkgsStatic
+  doCheck = stdenv.name == "stdenv-linux" && !stdenv.hostPlatform.isStatic;
 
   meta = {
     homepage = "https://github.com/NixOS/patchelf";
