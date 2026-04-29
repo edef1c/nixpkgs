@@ -124,14 +124,30 @@ stdenv.mkDerivation (finalAttrs: {
     ++ lib.optional cursesUI ncurses
     ++ lib.optional qt5UI qtbase;
 
-  preConfigure = ''
-    substituteInPlace Modules/Platform/UnixPaths.cmake \
-      --subst-var-by libc_bin ${lib.getBin stdenv.cc.libc} \
-      --subst-var-by libc_dev ${lib.getDev stdenv.cc.libc} \
-      --subst-var-by libc_lib ${lib.getLib stdenv.cc.libc}
-    # CC_FOR_BUILD and CXX_FOR_BUILD are used to bootstrap cmake
-    configureFlags="--parallel=''${NIX_BUILD_CORES:-1} CC=$CC_FOR_BUILD CXX=$CXX_FOR_BUILD $configureFlags $cmakeFlags"
-  '';
+  preConfigure =
+    lib.optionalString stdenv.hostPlatform.isStatic ''
+      # bootstrap is not autoconf and rejects --enable-static/--disable-shared;
+      # the cmakeFlags added by the static adapter are similarly meaningless here.
+      configureFlags="''${configureFlags//--enable-static/}"
+      configureFlags="''${configureFlags//--disable-shared/}"
+      cmakeFlags="''${cmakeFlags//-DBUILD_SHARED_LIBS:BOOL=OFF/}"
+      cmakeFlags="''${cmakeFlags//-DCMAKE_SKIP_INSTALL_RPATH=On/}"
+      ${lib.optionalString useSharedLibraries ''
+        # FindLibArchive.cmake uses find_library() directly and never consults
+        # pkg-config, so it misses Libs.private.  libarchive already propagates
+        # its deps (so -L paths land in NIX_LDFLAGS); we just need the -l flags
+        # to appear after -larchive on the link line.
+        export NIX_LDFLAGS="$NIX_LDFLAGS $($PKG_CONFIG --static --libs-only-L --libs-only-l libarchive)"
+      ''}
+    ''
+    + ''
+      substituteInPlace Modules/Platform/UnixPaths.cmake \
+        --subst-var-by libc_bin ${lib.getBin stdenv.cc.libc} \
+        --subst-var-by libc_dev ${lib.getDev stdenv.cc.libc} \
+        --subst-var-by libc_lib ${lib.getLib stdenv.cc.libc}
+      # CC_FOR_BUILD and CXX_FOR_BUILD are used to bootstrap cmake
+      configureFlags="--parallel=''${NIX_BUILD_CORES:-1} CC=$CC_FOR_BUILD CXX=$CXX_FOR_BUILD $configureFlags $cmakeFlags"
+    '';
 
   # The configuration script is not autoconf-based, although being similar;
   # triples and other interesting info are passed via CMAKE_* environment
