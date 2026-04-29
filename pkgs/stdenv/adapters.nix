@@ -86,6 +86,9 @@ rec {
       {
         mkDerivationFromStdenv = withOldMkDerivation old (
           stdenv: mkDerivationSuper: args:
+          let
+            staticFlag = if stdenv.hostPlatform.canReloc or false then "-static-pie" else "-static";
+          in
           if stdenv.hostPlatform.isDarwin then
             throw "Cannot build fully static binaries on Darwin/macOS"
           else
@@ -95,12 +98,12 @@ rec {
                 if (args.__structuredAttrs or false) || (args ? env.NIX_CFLAGS_LINK_BEFORE) then
                   {
                     env = (args.env or { }) // {
-                      NIX_CFLAGS_LINK_BEFORE = toString (args.env.NIX_CFLAGS_LINK_BEFORE or "") + " -static-pie";
+                      NIX_CFLAGS_LINK_BEFORE = toString (args.env.NIX_CFLAGS_LINK_BEFORE or "") + " ${staticFlag}";
                     };
                   }
                 else
                   {
-                    NIX_CFLAGS_LINK_BEFORE = toString (args.NIX_CFLAGS_LINK_BEFORE or "") + " -static-pie";
+                    NIX_CFLAGS_LINK_BEFORE = toString (args.NIX_CFLAGS_LINK_BEFORE or "") + " ${staticFlag}";
                   }
               )
               // lib.optionalAttrs (!(args.dontAddStaticConfigureFlags or false)) {

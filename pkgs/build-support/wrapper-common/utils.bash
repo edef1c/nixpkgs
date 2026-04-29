@@ -154,7 +154,10 @@ checkLinkType() {
     local arg
     type="dynamic"
     for arg in "$@"; do
-        if [[ "$arg" = -static ]]; then
+        # -static-pie is sticky: once requested, a later -static must not
+        # downgrade it, since GCC's startfile specs check -static before
+        # -static-pie and would otherwise pick non-PIE crt objects.
+        if [[ "$arg" = -static && "$type" != "static-pie" ]]; then
             type="static"
         elif [[ "$arg" = -static-pie ]]; then
             type="static-pie"

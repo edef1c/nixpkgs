@@ -192,6 +192,33 @@ extraBefore=(${hardeningCFlagsBefore[@]+"${hardeningCFlagsBefore[@]}"} $NIX_CFLA
 if [ "$dontLink" != 1 ]; then
     linkType=$(checkLinkType $NIX_CFLAGS_LINK_BEFORE_@suffixSalt@ $NIX_LDFLAGS_BEFORE_@suffixSalt@ "${params[@]}" ${NIX_CFLAGS_LINK_@suffixSalt@:-} $NIX_LDFLAGS_@suffixSalt@)
 
+    # When -static-pie is in effect (typically injected by pkgsStatic via
+    # NIX_CFLAGS_LINK_BEFORE), reconcile it with user-provided flags that
+    # GCC's spec machinery would otherwise mishandle.
+    if [[ "$linkType" == "static-pie" ]]; then
+        kept=()
+        dropStaticPie=0
+        for p in ${params+"${params[@]}"}; do
+            case "$p" in
+                -static)
+                    # GCC specs match -static before -static-pie when picking
+                    # startfiles, so letting both through selects non-PIE crt
+                    # objects and the link fails with relocation errors.
+                    continue ;;
+                -r | --relocatable | -Wl,-r | -Wl,--relocatable | -Wl,-i | -shared)
+                    # Partial links and shared objects are not final executables;
+                    # -static-pie would still pass -pie to ld and conflict.
+                    dropStaticPie=1 ;;
+            esac
+            kept+=("$p")
+        done
+        params=(${kept+"${kept[@]}"})
+        if (( dropStaticPie )); then
+            NIX_CFLAGS_LINK_BEFORE_@suffixSalt@=${NIX_CFLAGS_LINK_BEFORE_@suffixSalt@//-static-pie/}
+            linkType=$(checkLinkType $NIX_CFLAGS_LINK_BEFORE_@suffixSalt@ $NIX_LDFLAGS_BEFORE_@suffixSalt@ "${params[@]}" ${NIX_CFLAGS_LINK_@suffixSalt@:-} $NIX_LDFLAGS_@suffixSalt@)
+        fi
+    fi
+
     # Add the flags that should only be passed to the compiler when
     # linking.
     extraBefore+=($(filterRpathFlags "$linkType" $NIX_CFLAGS_LINK_BEFORE_@suffixSalt@))
